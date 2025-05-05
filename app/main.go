@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
-	"strings"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -45,8 +45,10 @@ func handleConnection(conn net.Conn) {
 }
 
 func writeResponse(conn net.Conn) {
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("message_size: %d\r\ncorrelation_id: %d\r\n", 5, 7))
 
-	conn.Write([]byte(builder.String()))
+	response := make([]byte, 8)
+	binary.BigEndian.PutUint32(response[0:4], 0)
+	binary.BigEndian.PutUint32(response[4:8], 7)
+
+	conn.Write(response)
 }
