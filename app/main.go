@@ -12,10 +12,10 @@ var _ = net.Listen
 var _ = os.Exit
 
 type Request struct {
-	MessageSize  int32
-	RequestApiKey int16
-	RequestApiVersion    int16
-	CorrelationId int32
+	MessageSize       int32
+	RequestApiKey     int16
+	RequestApiVersion int16
+	CorrelationId     int32
 }
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	// Uncomment this block to pass the first stage
-	
+
 	l, err := net.Listen("tcp", "0.0.0.0:9092")
 	if err != nil {
 		fmt.Println("Failed to bind to port 9092")
@@ -39,7 +39,6 @@ func main() {
 		go handleConnection(conn)
 	}
 }
-
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -58,7 +57,7 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func writeResponse(conn net.Conn, req *Request) error{
+func writeResponse(conn net.Conn, req *Request) error {
 
 	byteArray := make([]byte, 4)
 	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
@@ -78,31 +77,26 @@ func writeResponse(conn net.Conn, req *Request) error{
 }
 
 func parseRequest(request net.Conn) (*Request, error) {
-	buffer := make([]byte, 4096)
-	_, err := request.Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read message size: %v", err)
+	headerLen := 12
+	buffer := make([]byte, headerLen)
+	read := 0
+	for read < headerLen {
+		n, err := request.Read(buffer[read:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to read message header: %v", err)
+		}
+		read += n
 	}
-	// Read the first 4 bytes to get the message size
-	fmt.Println("messageSize: ", buffer[0:4])
+	// Now you have the full header
 	messageSize := binary.BigEndian.Uint32(buffer[0:4])
-
-	// read the next 2 bytes for ap key
-	fmt.Println("apiKey: ", buffer[4:6])
 	apiKey := binary.BigEndian.Uint16(buffer[4:6])
-
-	//read the next 2 bytes for api version
-	fmt.Println("apiVersion: ", buffer[6:8])
 	apiVersion := binary.BigEndian.Uint16(buffer[6:8])
-
-	// read the next 4 bytes for correlation id
-	fmt.Println("correlationId: ", buffer[8:12])
 	correlationId := binary.BigEndian.Uint32(buffer[8:12])
 
 	return &Request{
-		MessageSize: int32(messageSize),
-		RequestApiKey: int16(apiKey),
+		MessageSize:       int32(messageSize),
+		RequestApiKey:     int16(apiKey),
 		RequestApiVersion: int16(apiVersion),
-		CorrelationId: int32(correlationId),
+		CorrelationId:     int32(correlationId),
 	}, nil
 }
