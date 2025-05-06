@@ -58,20 +58,12 @@ func handleConnection(conn net.Conn) {
 }
 
 func writeResponse(conn net.Conn, req *Request) error {
-    // Response: [size][correlationId][errorCode][apiVersionsCount]
-    // For minimal valid response: errorCode=0, apiVersionsCount=0
-
-    responseSize := 4 + 2 + 4 // correlationId + errorCode + apiVersionsCount
-    buf := make([]byte, 4+responseSize)
+    buf := make([]byte, 8)
 
     // Response size (excluding itself)
-    binary.BigEndian.PutUint32(buf[0:4], uint32(responseSize))
+    binary.BigEndian.PutUint32(buf[0:4], uint32(req.MessageSize))
     // CorrelationId
     binary.BigEndian.PutUint32(buf[4:8], uint32(req.CorrelationId))
-    // ErrorCode (2 bytes)
-    binary.BigEndian.PutUint16(buf[8:10], 0)
-    // ApiVersions count (4 bytes, set to 0)
-    binary.BigEndian.PutUint32(buf[10:14], 0)
 
 	_, err := conn.Write(buf)
     return err
