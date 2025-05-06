@@ -60,15 +60,15 @@ func handleConnection(conn net.Conn) {
 
 func writeResponse(conn net.Conn, req *Request) error{
 
-	byteArray := make([]byte, 4)
-	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
-	_, err := conn.Write(byteArray)
-	if err != nil {
-		return err
-	}
+	byteArray := make([]byte, 8)
+	binary.BigEndian.PutUint32(byteArray[0:4], uint32(req.MessageSize))
+	// _, err := conn.Write(byteArray)
+	// if err != nil {
+	// 	return err
+	// }
 
-	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
-	_, err = conn.Write(byteArray)
+	binary.BigEndian.PutUint32(byteArray[4:8], uint32(req.CorrelationId))
+	_, err := conn.Write(byteArray)
 	if err != nil {
 		return err
 	}
