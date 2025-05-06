@@ -76,8 +76,8 @@ func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	binary.Write(&b, binary.BigEndian, int32(req.CorrelationId))
 	// Error code
 	binary.Write(&b, binary.BigEndian, int16(errorCode))
-	// Number of API keys (INT8, should be 1)
-	binary.Write(&b, binary.BigEndian, int8(1))
+	// Number of API keys (INT8, should be 2)
+	binary.Write(&b, binary.BigEndian, int8(2))
 	// API key entry for ApiVersions (18)
 	binary.Write(&b, binary.BigEndian, int16(18)) // api_key
 	binary.Write(&b, binary.BigEndian, int16(0))  // min_version
