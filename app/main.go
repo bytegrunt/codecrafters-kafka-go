@@ -72,29 +72,21 @@ func handleConnection(conn net.Conn) {
 func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	var b bytes.Buffer
 
-	// Correlation ID (always first in Kafka responses)
+	// Correlation ID
 	binary.Write(&b, binary.BigEndian, int32(req.CorrelationId))
-
 	// Error code
 	binary.Write(&b, binary.BigEndian, int16(errorCode))
-
-	// Number of API keys (INT8, must be 2 for CodeCrafters tester)
-	binary.Write(&b, binary.BigEndian, int8(2))
-
+	// Number of API keys (INT8, should be 1)
+	binary.Write(&b, binary.BigEndian, int8(1))
 	// API key entry for ApiVersions (18)
 	binary.Write(&b, binary.BigEndian, int16(18)) // api_key
 	binary.Write(&b, binary.BigEndian, int16(0))  // min_version
 	binary.Write(&b, binary.BigEndian, int16(4))  // max_version
-
-	// Dummy API key entry (required by tester, can be zeros)
-	binary.Write(&b, binary.BigEndian, int16(0)) // api_key
-	binary.Write(&b, binary.BigEndian, int16(0)) // min_version
-	binary.Write(&b, binary.BigEndian, int16(0)) // max_version
-
+	// Tagged fields (INT8, always 0) after api_key entry
+	binary.Write(&b, binary.BigEndian, int8(0))
 	// Throttle time (INT32, set to 0)
 	binary.Write(&b, binary.BigEndian, int32(0))
-
-	// Tagged fields (INT8, always 0)
+	// Tagged fields (INT8, always 0) after throttle_time_ms
 	binary.Write(&b, binary.BigEndian, int8(0))
 
 	// Write message size (excluding the 4 bytes for the size itself)
@@ -103,8 +95,6 @@ func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	if _, err := conn.Write(messageSize); err != nil {
 		return err
 	}
-
-	// Write the rest of the response
 	_, err := conn.Write(b.Bytes())
 	return err
 }
