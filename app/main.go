@@ -78,7 +78,7 @@ func writeResponse(conn net.Conn, req *Request) error{
 }
 
 func parseRequest(request net.Conn) (*Request, error) {
-	buffer := make([]byte, 32)
+	buffer := make([]byte, 4096)
 	_, err := request.Read(buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read message size: %v", err)
