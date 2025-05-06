@@ -71,20 +71,20 @@ func parseRequest(request net.Conn) (*Request, error) {
 		return nil, fmt.Errorf("failed to read message size: %v", err)
 	}
 	// Read the first 4 bytes to get the message size
-	fmt.Println("messageSize: ", buffer[0:3])
-	messageSize := binary.BigEndian.Uint32(buffer[0:3])
+	fmt.Println("messageSize: ", buffer[0:4])
+	messageSize := binary.BigEndian.Uint32(buffer[0:4])
 
 	// read the next 2 bytes for ap key
-	fmt.Println("apiKey: ", buffer[4:5])
-	apiKey := binary.BigEndian.Uint16(buffer[4:5])
+	fmt.Println("apiKey: ", buffer[4:6])
+	apiKey := binary.BigEndian.Uint16(buffer[4:6])
 
 	//read the next 2 bytes for api version
-	fmt.Println("apiVersion: ", buffer[6:7])
-	apiVersion := binary.BigEndian.Uint16(buffer[6:7])
+	fmt.Println("apiVersion: ", buffer[6:8])
+	apiVersion := binary.BigEndian.Uint16(buffer[6:8])
 
 	// read the next 4 bytes for correlation id
-	fmt.Println("correlationId: ", buffer[8:11])
-	correlationId := binary.BigEndian.Uint32(buffer[8:11])
+	fmt.Println("correlationId: ", buffer[8:12])
+	correlationId := binary.BigEndian.Uint32(buffer[8:12])
 
 
 	return &Request{
