@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -69,35 +70,40 @@ func handleConnection(conn net.Conn) {
 }
 
 func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
-	// Prepare ApiVersions response with one entry for ApiKey 18
-	apiKey := uint16(18)
-	minVersion := uint16(0)
-	maxVersion := uint16(4)
-
-	// Calculate response body size:
-	// correlationId (4) + errorCode (2) + apiKeysCount (4) + apiKeyEntry (6)
-	bodyLen := 4 + 2 + 4 + 6
-
-	response := make([]byte, 4+bodyLen) // 4 bytes for length prefix
-
-	// Set response length (excluding the length field itself)
-	binary.BigEndian.PutUint32(response[0:4], uint32(bodyLen))
+	var b bytes.Buffer
 
 	// Correlation ID
-	binary.BigEndian.PutUint32(response[4:8], uint32(req.CorrelationId))
+	binary.Write(&b, binary.BigEndian, int32(req.CorrelationId))
 
 	// Error code
-	binary.BigEndian.PutUint16(response[8:10], uint16(errorCode))
+	binary.Write(&b, binary.BigEndian, int16(errorCode))
 
-	// Number of API keys (1)
-	binary.BigEndian.PutUint32(response[10:14], 1)
+	// Number of APIs (int8, not int32!)
+	binary.Write(&b, binary.BigEndian, int8(1))
 
-	// API key entry
-	binary.BigEndian.PutUint16(response[14:16], apiKey)
-	binary.BigEndian.PutUint16(response[16:18], minVersion)
-	binary.BigEndian.PutUint16(response[18:20], maxVersion)
+	// API key entry for ApiVersions (18)
+	binary.Write(&b, binary.BigEndian, int16(18)) // API key
+	binary.Write(&b, binary.BigEndian, int16(0))  // min version
+	binary.Write(&b, binary.BigEndian, int16(4))  // max version
 
-	_, err := conn.Write(response)
+	// Tagged fields (int8(0))
+	binary.Write(&b, binary.BigEndian, int8(0))
+
+	// Throttle time (int32(0))
+	binary.Write(&b, binary.BigEndian, int32(0))
+
+	// Tagged fields (int8(0))
+	binary.Write(&b, binary.BigEndian, int8(0))
+
+	// Write message size
+	messageSize := make([]byte, 4)
+	binary.BigEndian.PutUint32(messageSize, uint32(b.Len()))
+	if _, err := conn.Write(messageSize); err != nil {
+		return err
+	}
+
+	// Write the rest of the response
+	_, err := conn.Write(b.Bytes())
 	return err
 }
 
