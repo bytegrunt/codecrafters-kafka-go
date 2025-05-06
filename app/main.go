@@ -76,35 +76,32 @@ func writeResponse(conn net.Conn, req *Request) error {
 	return nil
 }
 
-func parseRequest(request net.Conn) (*Request, error) {
-	headerLen := 12
-	buffer := make([]byte, headerLen)
+func parseRequest(conn net.Conn) (*Request, error) {
+	// Read the first 4 bytes to get the message size
+	sizeBuf := make([]byte, 4)
+	if _, err := conn.Read(sizeBuf); err != nil {
+		return nil, fmt.Errorf("failed to read message size: %v", err)
+	}
+	messageSize := binary.BigEndian.Uint32(sizeBuf)
+
+	// Read the rest of the message (messageSize bytes)
+	payload := make([]byte, messageSize)
 	read := 0
-	for read < headerLen {
-		n, err := request.Read(buffer[read:])
+	for read < int(messageSize) {
+		n, err := conn.Read(payload[read:])
 		if err != nil {
-			return nil, fmt.Errorf("failed to read message header: %v", err)
+			return nil, fmt.Errorf("failed to read message payload: %v", err)
 		}
 		read += n
 	}
-	messageSize := binary.BigEndian.Uint32(buffer[0:4])
-	apiKey := binary.BigEndian.Uint16(buffer[4:6])
-	apiVersion := binary.BigEndian.Uint16(buffer[6:8])
-	correlationId := binary.BigEndian.Uint32(buffer[8:12])
 
-	// Read the rest of the request body (if any)
-	bodyLen := int(messageSize) - (headerLen - 4) // messageSize excludes itself
-	if bodyLen > 0 {
-		body := make([]byte, bodyLen)
-		read := 0
-		for read < bodyLen {
-			n, err := request.Read(body[read:])
-			if err != nil {
-				return nil, fmt.Errorf("failed to read message body: %v", err)
-			}
-			read += n
-		}
+	// Parse the standard Kafka request header from the payload
+	if len(payload) < 8 {
+		return nil, fmt.Errorf("payload too short for Kafka header")
 	}
+	apiKey := binary.BigEndian.Uint16(payload[0:2])
+	apiVersion := binary.BigEndian.Uint16(payload[2:4])
+	correlationId := binary.BigEndian.Uint32(payload[4:8])
 
 	return &Request{
 		MessageSize:       int32(messageSize),
