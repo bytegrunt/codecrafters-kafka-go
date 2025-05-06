@@ -40,6 +40,7 @@ func main() {
 	}
 }
 
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -57,20 +58,26 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func writeResponse(conn net.Conn, req *Request) error {
-    buf := make([]byte, 8)
+func writeResponse(conn net.Conn, req *Request) error{
 
-    // Response size (excluding itself)
-    binary.BigEndian.PutUint32(buf[0:4], uint32(req.MessageSize))
-    // CorrelationId
-    binary.BigEndian.PutUint32(buf[4:8], uint32(req.CorrelationId))
+	byteArray := make([]byte, 4)
+	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
+	_, err := conn.Write(byteArray)
+	if err != nil {
+		return err
+	}
 
-	_, err := conn.Write(buf)
-    return err
+	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
+	_, err = conn.Write(byteArray)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func parseRequest(request net.Conn) (*Request, error) {
-	buffer := make([]byte, 12)
+	buffer := make([]byte, 24)
 	_, err := request.Read(buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read message size: %v", err)
