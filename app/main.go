@@ -55,7 +55,7 @@ func handleConnection(conn net.Conn) {
 	var errorCode int16
 	if req.RequestApiVersion < 0 || req.RequestApiVersion > 4 {
 		fmt.Println("Error: ApiVersion out of range")
-		errorCode= 35
+		errorCode = 35
 	} else {
 		fmt.Println("ApiVersion is within range")
 		errorCode = 0
@@ -69,27 +69,36 @@ func handleConnection(conn net.Conn) {
 }
 
 func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
+	// Prepare ApiVersions response with one entry for ApiKey 18
+	apiKey := uint16(18)
+	minVersion := uint16(0)
+	maxVersion := uint16(4)
 
-	byteArray := make([]byte, 4)
-	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
-	_, err := conn.Write(byteArray)
-	if err != nil {
-		return err
-	}
+	// Calculate response body size:
+	// correlationId (4) + errorCode (2) + apiKeysCount (4) + apiKeyEntry (6)
+	bodyLen := 4 + 2 + 4 + 6
 
-	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
-	_, err = conn.Write(byteArray)
-	if err != nil {
-		return err
-	}
+	response := make([]byte, 4+bodyLen) // 4 bytes for length prefix
 
-	binary.BigEndian.PutUint16(byteArray, uint16(errorCode))
-	_, err = conn.Write(byteArray)
-	if err != nil {
-		return err
-	}
+	// Set response length (excluding the length field itself)
+	binary.BigEndian.PutUint32(response[0:4], uint32(bodyLen))
 
-	return nil
+	// Correlation ID
+	binary.BigEndian.PutUint32(response[4:8], uint32(req.CorrelationId))
+
+	// Error code
+	binary.BigEndian.PutUint16(response[8:10], uint16(errorCode))
+
+	// Number of API keys (1)
+	binary.BigEndian.PutUint32(response[10:14], 1)
+
+	// API key entry
+	binary.BigEndian.PutUint16(response[14:16], apiKey)
+	binary.BigEndian.PutUint16(response[16:18], minVersion)
+	binary.BigEndian.PutUint16(response[18:20], maxVersion)
+
+	_, err := conn.Write(response)
+	return err
 }
 
 func parseRequest(conn net.Conn) (*Request, error) {
