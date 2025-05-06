@@ -87,11 +87,24 @@ func parseRequest(request net.Conn) (*Request, error) {
 		}
 		read += n
 	}
-	// Now you have the full header
 	messageSize := binary.BigEndian.Uint32(buffer[0:4])
 	apiKey := binary.BigEndian.Uint16(buffer[4:6])
 	apiVersion := binary.BigEndian.Uint16(buffer[6:8])
 	correlationId := binary.BigEndian.Uint32(buffer[8:12])
+
+	// Read the rest of the request body (if any)
+	bodyLen := int(messageSize) - (headerLen - 4) // messageSize excludes itself
+	if bodyLen > 0 {
+		body := make([]byte, bodyLen)
+		read := 0
+		for read < bodyLen {
+			n, err := request.Read(body[read:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to read message body: %v", err)
+			}
+			read += n
+		}
+	}
 
 	return &Request{
 		MessageSize:       int32(messageSize),
