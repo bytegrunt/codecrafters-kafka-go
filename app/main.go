@@ -66,14 +66,12 @@ func writeResponse(conn net.Conn, req *Request) error{
 	if err != nil {
 		return err
 	}
-	conn.Write(byteArray)
 
 	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
 	_, err = conn.Write(byteArray)
 	if err != nil {
 		return err
 	}
-	conn.Write(byteArray)
 
 	return nil
 }
@@ -99,7 +97,6 @@ func parseRequest(request net.Conn) (*Request, error) {
 	// read the next 4 bytes for correlation id
 	fmt.Println("correlationId: ", buffer[8:12])
 	correlationId := binary.BigEndian.Uint32(buffer[8:12])
-
 
 	return &Request{
 		MessageSize: int32(messageSize),
