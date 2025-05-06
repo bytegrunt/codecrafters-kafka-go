@@ -50,14 +50,25 @@ func handleConnection(conn net.Conn) {
 	}
 	fmt.Println("Received request: ", req)
 
-	writeResponse(conn, req)
+	// Switch req.ApiVersion is within range of 0-4
+	// set erroCode to 0 if it is within range, else set it to 35
+	var errorCode int16
+	if req.RequestApiVersion < 0 || req.RequestApiVersion > 4 {
+		fmt.Println("Error: ApiVersion out of range")
+		errorCode= 35
+	} else {
+		fmt.Println("ApiVersion is within range")
+		errorCode = 0
+	}
+
+	writeResponse(conn, req, errorCode)
 	if err != nil {
 		fmt.Println("Error writing response: ", err.Error())
 		return
 	}
 }
 
-func writeResponse(conn net.Conn, req *Request) error {
+func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 
 	byteArray := make([]byte, 4)
 	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
@@ -67,7 +78,12 @@ func writeResponse(conn net.Conn, req *Request) error {
 	}
 
 	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
-	fmt.Println("correlationId: ", byteArray)
+	_, err = conn.Write(byteArray)
+	if err != nil {
+		return err
+	}
+
+	binary.BigEndian.PutUint16(byteArray, uint16(errorCode))
 	_, err = conn.Write(byteArray)
 	if err != nil {
 		return err
@@ -95,10 +111,6 @@ func parseRequest(conn net.Conn) (*Request, error) {
 		read += n
 	}
 
-	// Parse the standard Kafka request header from the payload
-	if len(payload) < 8 {
-		return nil, fmt.Errorf("payload too short for Kafka header")
-	}
 	apiKey := binary.BigEndian.Uint16(payload[0:2])
 	apiVersion := binary.BigEndian.Uint16(payload[2:4])
 	correlationId := binary.BigEndian.Uint32(payload[4:8])
