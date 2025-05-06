@@ -65,41 +65,26 @@ func writeResponse(conn net.Conn, req *Request) {
 }
 
 func parseRequest(request net.Conn) (*Request, error) {
-	// Read the first 4 bytes to get the message size
-	buffer := make([]byte, 4)
+	buffer := make([]byte, 12)
 	_, err := request.Read(buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read message size: %v", err)
 	}
-	fmt.Println("messageSize: ", buffer)
-	messageSize := binary.BigEndian.Uint32(buffer)
+	// Read the first 4 bytes to get the message size
+	fmt.Println("messageSize: ", buffer[0:4])
+	messageSize := binary.BigEndian.Uint32(buffer[0:4])
 
 	// read the next 2 bytes for ap key
-	buffer = make([]byte, 2)
-	_, err = request.Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read api key: %v", err)
-	}
-	fmt.Println("apiKey: ", buffer)
-	apiKey := binary.BigEndian.Uint16(buffer)
+	fmt.Println("apiKey: ", buffer[5:6])
+	apiKey := binary.BigEndian.Uint16(buffer[5:6])
 
 	//read the next 2 bytes for api version
-	buffer = make([]byte, 2)
-	_, err = request.Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read api version: %v", err)
-	}
-	fmt.Println("apiVersion: ", buffer)
-	apiVersion := binary.BigEndian.Uint16(buffer)
+	fmt.Println("apiVersion: ", buffer[7:8])
+	apiVersion := binary.BigEndian.Uint16(buffer[7:8])
 
 	// read the next 4 bytes for correlation id
-	buffer = make([]byte, 4)
-	_, err = request.Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read correlation id: %v", err)
-	}
-	fmt.Println("correlationId: ", buffer)
-	correlationId := binary.BigEndian.Uint32(buffer)
+	fmt.Println("correlationId: ", buffer[9:12])
+	correlationId := binary.BigEndian.Uint32(buffer[9:12])
 
 
 	return &Request{
