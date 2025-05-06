@@ -52,16 +52,30 @@ func handleConnection(conn net.Conn) {
 	fmt.Println("Received request: ", req)
 
 	writeResponse(conn, req)
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+		return
+	}
 }
 
-func writeResponse(conn net.Conn, req *Request) {
+func writeResponse(conn net.Conn, req *Request) error{
 
-	response := make([]byte, 8)
-	binary.BigEndian.PutUint32(response[0:4], uint32(req.MessageSize))
-	binary.BigEndian.PutUint32(response[4:8], uint32(req.CorrelationId))
+	byteArray := make([]byte, 4)
+	binary.BigEndian.PutUint32(byteArray, uint32(req.MessageSize))
+	_, err := conn.Write(byteArray)
+	if err != nil {
+		return err
+	}
+	conn.Write(byteArray)
 
-	fmt.Println("Response: ", response)
-	conn.Write(response)
+	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
+	_, err = conn.Write(byteArray)
+	if err != nil {
+		return err
+	}
+	conn.Write(byteArray)
+
+	return nil
 }
 
 func parseRequest(request net.Conn) (*Request, error) {
