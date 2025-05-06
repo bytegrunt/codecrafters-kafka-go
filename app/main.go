@@ -68,6 +68,7 @@ func writeResponse(conn net.Conn, req *Request) error{
 	}
 
 	binary.BigEndian.PutUint32(byteArray, uint32(req.CorrelationId))
+	fmt.Println("correlationId: ", byteArray)
 	_, err = conn.Write(byteArray)
 	if err != nil {
 		return err
