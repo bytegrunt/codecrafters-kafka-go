@@ -55,7 +55,7 @@ func handleConnection(conn net.Conn) {
 
 	go func() {
 		for {
-			req, offset, err := parseRequest(conn)
+			req, offset, payload, err := parseRequest(conn)
 			if err != nil {
 				fmt.Println("Error parsing request: ", err.Error())
 				done <- true // signal to close connection
@@ -65,7 +65,7 @@ func handleConnection(conn net.Conn) {
 
 			// If this is a DescribeTopicPartitions request, parse the body
 			if req.RequestApiKey == 75 && req.RequestApiVersion == 0 {
-				reqBody, err := parseDescribeTopicPartitionsBody(conn, req.MessageSize, offset)
+				reqBody, err := parseDescribeTopicPartitionsBody(payload, offset)
 				if err != nil {
 					fmt.Println("Error parsing describe topic partitions body: ", err.Error())
 					done <- true
@@ -133,12 +133,12 @@ func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	return err
 }
 
-// parseRequest now returns *Request and the offset where it stopped parsing
-func parseRequest(conn net.Conn) (*Request, int, error) {
+// parseRequest now returns *Request, the offset where it stopped parsing, and the payload
+func parseRequest(conn net.Conn) (*Request, int, []byte, error) {
 	// Read the first 4 bytes to get the message size
 	sizeBuf := make([]byte, 4)
 	if _, err := conn.Read(sizeBuf); err != nil {
-		return nil, 0, fmt.Errorf("failed to read message size: %v", err)
+		return nil, 0, nil, fmt.Errorf("failed to read message size: %v", err)
 	}
 	messageSize := binary.BigEndian.Uint32(sizeBuf)
 
@@ -148,7 +148,7 @@ func parseRequest(conn net.Conn) (*Request, int, error) {
 	for read < int(messageSize) {
 		n, err := conn.Read(payload[read:])
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to read message payload: %v", err)
+			return nil, 0, nil, fmt.Errorf("failed to read message payload: %v", err)
 		}
 		read += n
 	}
@@ -178,22 +178,10 @@ func parseRequest(conn net.Conn) (*Request, int, error) {
 		RequestApiVersion: int16(apiVersion),
 		CorrelationId:     int32(correlationId),
 		ClientId:          clientId,
-	}, offset, nil
+	}, offset, payload, nil
 }
 
-func parseDescribeTopicPartitionsBody(conn net.Conn, messageSize int32, offset int) (*DescribeTopicPartitionsRequestBody, error) {
-	// Read the rest of the message (messageSize bytes)
-	payload := make([]byte, messageSize)
-	read := 0
-	for read < int(messageSize) {
-		n, err := conn.Read(payload[read:])
-		if err != nil {
-			return nil, fmt.Errorf("failed to read message payload: %v", err)
-		}
-		read += n
-	}
-
-	// Start parsing from the given offset
+func parseDescribeTopicPartitionsBody(payload []byte, offset int) (*DescribeTopicPartitionsRequestBody, error) {
 	i := offset
 
 	// Topics array length (1 byte, minus 1)
