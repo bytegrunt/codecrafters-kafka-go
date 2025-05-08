@@ -90,10 +90,12 @@ func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	binary.Write(&b, binary.BigEndian, int16(18)) // api_key
 	binary.Write(&b, binary.BigEndian, int16(0))  // min_version
 	binary.Write(&b, binary.BigEndian, int16(4))  // max_version
+	binary.Write(&b, binary.BigEndian, int8(0))   // tagged fields after api_key
 	// API key entry for ApiVersions (75)
 	binary.Write(&b, binary.BigEndian, int16(75)) // api_key
 	binary.Write(&b, binary.BigEndian, int16(0))  // min_version
 	binary.Write(&b, binary.BigEndian, int16(0))  // max_version
+	binary.Write(&b, binary.BigEndian, int8(0))   // tagged fields after api_key
 	// Tagged fields (INT8, always 0) after api_key entry
 	binary.Write(&b, binary.BigEndian, int8(0))
 	// Throttle time (INT32, set to 0)
