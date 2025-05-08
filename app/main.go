@@ -80,18 +80,20 @@ func handleConnection(conn net.Conn) {
 			}
 
 			var errorCode int16
-			if req.RequestApiKey == 18 && (req.RequestApiVersion < 0 || req.RequestApiVersion > 4) {
+			if req.RequestApiKey == 18 { 
+			if req.RequestApiVersion < 0 || req.RequestApiVersion > 4 {
 				fmt.Println("Error: ApiVersion out of range")
 				errorCode = 35
 			} else {
 				fmt.Println("ApiVersion is within range")
 				errorCode = 0
-				if err := writeResponse(conn, req, errorCode); err != nil {
-					fmt.Println("Error writing response: ", err.Error())
-					done <- true // signal to close connection
-					return
-				}
 			}
+			if err := writeResponse(conn, req, errorCode); err != nil {
+				fmt.Println("Error writing response: ", err.Error())
+				done <- true // signal to close connection
+				return
+			}
+		}
 
 		}
 	}()
