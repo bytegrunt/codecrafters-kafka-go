@@ -17,6 +17,12 @@ type Request struct {
 	RequestApiKey     int16
 	RequestApiVersion int16
 	CorrelationId     int32
+	ClientId          string
+}
+
+type DescribeTopicPartitionsRequestBody struct {
+	TopicName            string
+	ResponsePartitionLimit int32
 }
 
 func main() {
@@ -49,13 +55,22 @@ func handleConnection(conn net.Conn) {
 
 	go func() {
 		for {
-			req, err := parseRequest(conn)
+			req, offset, err := parseRequest(conn)
 			if err != nil {
 				fmt.Println("Error parsing request: ", err.Error())
 				done <- true // signal to close connection
 				return
 			}
 			fmt.Println("Received request: ", req)
+
+			// If this is a DescribeTopicPartitions request, parse the body
+			if req.RequestApiKey == 75 && req.RequestApiVersion == 0 {
+				if _, err := parseDescribeTopicPartitionsBody(conn, req.MessageSize, offset); err != nil {
+					fmt.Println("Error parsing describe topic partitions body: ", err.Error())
+					done <- true
+					return
+				}
+			}
 
 			var errorCode int16
 			if req.RequestApiVersion < 0 || req.RequestApiVersion > 4 {
@@ -111,14 +126,56 @@ func writeResponse(conn net.Conn, req *Request, errorCode int16) error {
 	return err
 }
 
-func parseRequest(conn net.Conn) (*Request, error) {
+// parseRequest now returns *Request and the offset where it stopped parsing
+func parseRequest(conn net.Conn) (*Request, int, error) {
 	// Read the first 4 bytes to get the message size
 	sizeBuf := make([]byte, 4)
 	if _, err := conn.Read(sizeBuf); err != nil {
-		return nil, fmt.Errorf("failed to read message size: %v", err)
+		return nil, 0, fmt.Errorf("failed to read message size: %v", err)
 	}
 	messageSize := binary.BigEndian.Uint32(sizeBuf)
 
+	// Read the rest of the message (messageSize bytes)
+	payload := make([]byte, messageSize)
+	read := 0
+	for read < int(messageSize) {
+		n, err := conn.Read(payload[read:])
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to read message payload: %v", err)
+		}
+		read += n
+	}
+
+	offset := 0
+	apiKey := binary.BigEndian.Uint16(payload[offset : offset+2])
+	offset += 2
+	apiVersion := binary.BigEndian.Uint16(payload[offset : offset+2])
+	offset += 2
+	correlationId := binary.BigEndian.Uint32(payload[offset : offset+4])
+	offset += 4
+
+	// Read ClientId length (2 bytes)
+	clientIdLen := binary.BigEndian.Uint16(payload[offset : offset+2])
+	offset += 2
+	clientId := ""
+	if clientIdLen > 0 {
+		clientId = string(payload[offset : offset+int(clientIdLen)])
+		offset += int(clientIdLen)
+	}
+	// Skip 1 byte empty buffer
+	offset += 1
+
+	return &Request{
+		MessageSize:       int32(messageSize),
+		RequestApiKey:     int16(apiKey),
+		RequestApiVersion: int16(apiVersion),
+		CorrelationId:     int32(correlationId),
+		ClientId:          clientId,
+	}, offset, nil
+}
+
+// Parses the DescribeTopicPartitions request body if needed
+func parseDescribeTopicPartitionsBody(conn net.Conn, messageSize int32, offset int) (*DescribeTopicPartitionsRequestBody, error) {
 	// Read the rest of the message (messageSize bytes)
 	payload := make([]byte, messageSize)
 	read := 0
@@ -130,14 +187,49 @@ func parseRequest(conn net.Conn) (*Request, error) {
 		read += n
 	}
 
-	apiKey := binary.BigEndian.Uint16(payload[0:2])
-	apiVersion := binary.BigEndian.Uint16(payload[2:4])
-	correlationId := binary.BigEndian.Uint32(payload[4:8])
+	// Start parsing from the given offset
+	i := offset
 
-	return &Request{
-		MessageSize:       int32(messageSize),
-		RequestApiKey:     int16(apiKey),
-		RequestApiVersion: int16(apiVersion),
-		CorrelationId:     int32(correlationId),
+	// Topics array length (1 byte, minus 1)
+	if i >= len(payload) {
+		return nil, fmt.Errorf("unexpected end of payload while reading topics array length")
+	}
+	topicsArrayLen := int(payload[i]) - 1
+	i++
+
+	if topicsArrayLen < 1 {
+		return nil, fmt.Errorf("no topics found in request")
+	}
+
+	// Topic name length (1 byte, minus 1)
+	if i >= len(payload) {
+		return nil, fmt.Errorf("unexpected end of payload while reading topic name length")
+	}
+	topicNameLen := int(payload[i]) - 1
+	i++
+
+	if topicNameLen < 1 || i+topicNameLen > len(payload) {
+		return nil, fmt.Errorf("invalid topic name length")
+	}
+
+	// Topic name
+	topicName := string(payload[i : i+topicNameLen])
+	i += topicNameLen
+
+	// Skip empty buffer (1 byte)
+	if i >= len(payload) {
+		return nil, fmt.Errorf("unexpected end of payload while skipping empty buffer")
+	}
+	i++
+
+	// ResponsePartitionLimit (4 bytes)
+	if i+4 > len(payload) {
+		return nil, fmt.Errorf("unexpected end of payload while reading ResponsePartitionLimit")
+	}
+	responsePartitionLimit := int32(binary.BigEndian.Uint32(payload[i : i+4]))
+
+	return &DescribeTopicPartitionsRequestBody{
+		TopicName:              topicName,
+		ResponsePartitionLimit: responsePartitionLimit,
 	}, nil
 }
