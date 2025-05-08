@@ -65,11 +65,18 @@ func handleConnection(conn net.Conn) {
 
 			// If this is a DescribeTopicPartitions request, parse the body
 			if req.RequestApiKey == 75 && req.RequestApiVersion == 0 {
-				if _, err := parseDescribeTopicPartitionsBody(conn, req.MessageSize, offset); err != nil {
+				reqBody, err := parseDescribeTopicPartitionsBody(conn, req.MessageSize, offset)
+				if err != nil {
 					fmt.Println("Error parsing describe topic partitions body: ", err.Error())
 					done <- true
 					return
 				}
+				if err := writeDescribeTopicPartitionsResponse(conn, req.CorrelationId, reqBody); err != nil {
+					fmt.Println("Error writing describe topic partitions response: ", err.Error())
+					done <- true
+					return
+				}
+				continue
 			}
 
 			var errorCode int16
@@ -174,7 +181,6 @@ func parseRequest(conn net.Conn) (*Request, int, error) {
 	}, offset, nil
 }
 
-// Parses the DescribeTopicPartitions request body if needed
 func parseDescribeTopicPartitionsBody(conn net.Conn, messageSize int32, offset int) (*DescribeTopicPartitionsRequestBody, error) {
 	// Read the rest of the message (messageSize bytes)
 	payload := make([]byte, messageSize)
@@ -232,4 +238,51 @@ func parseDescribeTopicPartitionsBody(conn net.Conn, messageSize int32, offset i
 		TopicName:              topicName,
 		ResponsePartitionLimit: responsePartitionLimit,
 	}, nil
+}
+
+func writeDescribeTopicPartitionsResponse(conn net.Conn, correlationId int32, reqBody *DescribeTopicPartitionsRequestBody) error {
+	var b bytes.Buffer
+
+	// Correlation ID (4 bytes)
+	binary.Write(&b, binary.BigEndian, correlationId)
+	// Empty 1 byte buffer
+	binary.Write(&b, binary.BigEndian, byte(0))
+	// Throttle time (4 bytes, all 0)
+	binary.Write(&b, binary.BigEndian, int32(0))
+	// Topics array length (1 byte, hardcoded to 2 for 1 topic)
+	binary.Write(&b, binary.BigEndian, byte(2))
+
+	// --- Topic array entry ---
+	// Error code (2 bytes, hardcoded to 3 for UNKNOWN_TOPIC)
+	binary.Write(&b, binary.BigEndian, int16(3))
+	// Topic name length (1 byte, topic name length + 1)
+	topicNameLen := len(reqBody.TopicName)
+	binary.Write(&b, binary.BigEndian, byte(topicNameLen+1))
+	// Topic name (x bytes)
+	b.Write([]byte(reqBody.TopicName))
+	// Topic ID (16 bytes, all 0)
+	b.Write(make([]byte, 16))
+	// isInternal (1 byte, 0)
+	binary.Write(&b, binary.BigEndian, byte(0))
+	// Partitions array (1 byte, hardcoded to 1 for empty array)
+	binary.Write(&b, binary.BigEndian, byte(1))
+	// Topic authorized operations (4 bytes, 0x00000df8)
+	binary.Write(&b, binary.BigEndian, uint32(0x00000df8))
+	// Empty 1 byte buffer (end of topic)
+	binary.Write(&b, binary.BigEndian, byte(0))
+	// --- End topic array entry ---
+
+	// Cursor (1 byte, hardcoded to 0xff for null)
+	binary.Write(&b, binary.BigEndian, byte(0xff))
+	// Final empty 1 byte buffer
+	binary.Write(&b, binary.BigEndian, byte(0))
+
+	// Write message size (excluding the 4 bytes for the size itself)
+	messageSize := make([]byte, 4)
+	binary.BigEndian.PutUint32(messageSize, uint32(b.Len()))
+	if _, err := conn.Write(messageSize); err != nil {
+		return err
+	}
+	_, err := conn.Write(b.Bytes())
+	return err
 }
